@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# qudossl-commercial — the QudoSSL Commercial CLI.
+#
+# A thin banner-and-delegate wrapper around the OpenSSL command-line app. Every
+# invocation is passed through unchanged; the only added behaviour is a product
+# banner on `version` and on a bare invocation.
+#
+# Why a wrapper rather than a rebranded binary:
+#
+#   This product's entire proposition is that openssl/ is upstream OpenSSL
+#   3.5.7 with nothing changed. Branding the binary would mean editing
+#   VERSION.dat or opensslv.h.in inside the vendored tree, which would make the
+#   claim false — and both files sit inside the FIPS module source manifest, so
+#   editing them has certification consequences as well as honesty ones.
+#
+#   A wrapper gives the product an identity with zero upstream changes. The
+#   `openssl` binary installed alongside is the genuine article and reports
+#   itself as plain OpenSSL 3.5.7, which is exactly what a customer auditing
+#   the install should see.
+#
+# Deliberately no fallback to a system openssl: running a distribution build
+# under this banner would misidentify which library is in use.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+openssl_bin="$here/openssl"
+
+if [ ! -x "$openssl_bin" ]; then
+  echo "qudossl-commercial: no openssl binary at $openssl_bin" >&2
+  echo "  This wrapper must sit in the same bin/ directory as the openssl it" >&2
+  echo "  delegates to. It does not fall back to a system OpenSSL." >&2
+  exit 1
+fi
+
+banner() {
+  cat <<'EOF'
+QudoSSL Commercial 1.0.0 (OpenSSL 3.5.7, unmodified)
+Copyright (c) ZENV Quantum Private Limited. Apache License 2.0.
+Upstream OpenSSL, built and supported by ZENV Quantum.
+Post-quantum TLS 1.3: ML-KEM (FIPS 203) hybrid key exchange, from upstream.
+EOF
+}
+
+case "${1:-}" in
+  version)
+    banner
+    ;;
+  "")
+    banner
+    echo
+    ;;
+esac
+
+exec "$openssl_bin" "$@"
