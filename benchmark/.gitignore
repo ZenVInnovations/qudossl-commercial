@@ -1,0 +1,34 @@
+# Everything here is produced by ./scripts/build.sh or a run. None of it is
+# portable: the binaries have absolute rpaths baked in, the configs contain
+# absolute paths, and the certificate directories hold private keys.
+
+# Compiled benchmark binaries - rebuild with ./scripts/build.sh
+build-qudo/
+build-stock/
+bench-qudo
+bench-stock
+*.log
+
+# Generated key material. Test keys, but private keys all the same.
+certs/
+certs-ecdsa/
+rustls/
+
+# Generated configs - they embed absolute paths to the OpenSSL trees
+conf/
+
+# Measurement output and generated report. Results belong with the report that
+# cites them, not in the source tree; commit a run deliberately if you want to
+# keep it as evidence.
+data/
+REPORT.md
+REPORT.pdf
+REPORT.html
+.report.html
+
+# cmake writes this into the vendored source tree from config.h.in
+perftools/source/config.h
+
+# Not a file - a character device created here by accident. Left in place rather
+# than deleted, since nothing in this suite reads it.
+.mcp.json

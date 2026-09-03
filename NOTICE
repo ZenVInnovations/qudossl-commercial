@@ -1,0 +1,25 @@
+QudoSSL Commercial
+Copyright (c) 2024-2026 ZENV Quantum Private Limited
+
+QudoSSL Commercial is a reproducible, supported build of unmodified upstream
+OpenSSL 3.5.7. It bundles one third-party component — OpenSSL — under the
+Apache License 2.0. This repository adds no code of its own under any licence,
+and in particular adds no ZENV cryptography: the ML-KEM, ML-DSA and SLH-DSA
+implementations shipped here are OpenSSL's own, not ZENV's.
+
+The complete, authoritative notices are the LICENSE file below and the per-file
+SPDX / copyright headers within openssl/; this file aggregates the principal
+attribution.
+
+================================================================================
+OpenSSL
+--------------------------------------------------------------------------------
+  Copyright 1998-2025 The OpenSSL Project Authors. All Rights Reserved.
+  Licensed under the Apache License, Version 2.0.
+  Source: https://github.com/openssl/openssl (tag openssl-3.5.7)
+  License text: openssl/LICENSE.txt
+
+================================================================================
+
+Retain this NOTICE file and openssl/LICENSE.txt with any redistribution of
+QudoSSL Commercial, in source or binary form.

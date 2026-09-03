@@ -105,3 +105,9 @@ openssl/ssl/fipsmodule.cnf
 .DS_Store
 *.swp
 *~
+
+# --- not product source -----------------------------------------------------
+# Meeting notes / working docs, not repo source.
+*.docx
+# Local pre-submodule backup of the 3.5.4 tree.
+/openssl-fips.local.bak/
