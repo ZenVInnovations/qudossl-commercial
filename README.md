@@ -393,6 +393,10 @@ install prefix, and a provider/ML-KEM-groups check.
 
 - `docs/qudossl-commercial-current-state.md` — **living project status**: what
   the product is today, build/CI state, support posture. Start here.
+- `docs/installation.md` — the complete install guide: per-platform prerequisites,
+  build, FIPS setup, verification, containers and uninstall.
+- `docs/deploy-nginx.md` — put nginx in front for post-quantum TLS.
+- `docs/deploy-haproxy.md` — put HAProxy in front for post-quantum TLS.
 - `docs/crypto-officer-guide.md` — running the OpenSSL FIPS provider correctly.
 - `docs/fips-mode.md` — the FIPS-mode posture in full, and why this artefact is
   *not* a validated module.
