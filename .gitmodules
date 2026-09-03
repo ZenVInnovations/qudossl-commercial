@@ -1,0 +1,8 @@
+# QudoSSL Commercial vendors the FIPS module source as a thin fork: a submodule
+# pinned to the upstream OpenSSL 3.5.4 tag (the CMVP validation boundary, ADR-0006).
+# It is never modified — only the FIPS module (fips.so/.dylib/.dll) is built from it,
+# to run under the 3.5.7 libraries in openssl/. Materialise with:
+#   git submodule update --init openssl-fips
+[submodule "openssl-fips"]
+	path = openssl-fips
+	url = https://github.com/openssl/openssl.git

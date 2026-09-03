@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# qudossl — the QudoSSL Commercial CLI.
+#
+# A thin banner-and-delegate wrapper around the OpenSSL command-line app this
+# product ships. Every invocation is passed through unchanged; the only added
+# behaviour is a product banner on `version` and on a bare invocation.
+#
+# Why a wrapper and not a rebranded binary:
+#
+#   QudoSSL Commercial's entire proposition is that openssl/ is upstream OpenSSL
+#   3.5.7 with nothing changed — proved, not asserted, by `make verify-pristine`.
+#   Branding the binary would mean editing VERSION.dat or opensslv.h.in inside
+#   the vendored tree, which would make that claim false — and both files sit
+#   inside the FIPS module source manifest, so editing them carries
+#   certification consequences as well as honesty ones. See docs/adr/ADR-0002.
+#
+#   The wrapper gives the product its `qudossl` identity with zero upstream
+#   changes. The `openssl` binary installed alongside is the genuine article and
+#   reports itself as plain "OpenSSL 3.5.7", which is exactly what a customer
+#   auditing the install should see.
+#
+set -euo pipefail
+
+# The QudoSSL product version, independent of the OpenSSL base version the
+# delegated binary reports. This is the "1.0.0" in "QudoSSL 1.0.0".
+QUDO_PRODUCT_VERSION="1.0.0"
+
+# Resolve the openssl binary this wrapper delegates to. Deliberately no fallback
+# to a system openssl: running some other build under a QudoSSL banner would
+# silently misidentify which library is in use. The symlink guard stops the
+# wrapper from ever delegating to itself.
+self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+openssl_bin=""
+for c in "${self_dir}/openssl" "${self_dir}/../bin/openssl"; do
+    if [ -x "$c" ] && { [ ! -L "$c" ] || [ "$(basename "$(readlink "$c")")" != "qudossl" ]; }; then
+        openssl_bin="$c"; break
+    fi
+done
+
+if [ -z "$openssl_bin" ]; then
+    echo "qudossl: cannot find the openssl binary next to $self_dir" >&2
+    echo "qudossl: this wrapper never falls back to a system openssl." >&2
+    exit 1
+fi
+
+# Line 1's base version is read from the real binary rather than hard-coded, so
+# it can never drift from the OpenSSL that is actually installed.
+banner() {
+    local base
+    base="$("$openssl_bin" version 2>/dev/null | awk '{print $2}')"
+    cat <<EOF
+QudoSSL ${QUDO_PRODUCT_VERSION} (OpenSSL ${base} base)
+Copyright (c) ZENV Quantum Private Limited. Apache License 2.0.
+Commercial build of unmodified upstream OpenSSL ${base} LTS.
+Post-quantum TLS 1.3: ML-KEM (FIPS 203) hybrid key exchange.
+FIPS module: OpenSSL FIPS Provider  ·  https://zenv.ai/qudossl
+EOF
+}
+
+# Bare invocation: banner, then the interactive openssl prompt.
+if [ $# -eq 0 ]; then
+    banner
+    exec "$openssl_bin"
+fi
+
+# `qudossl version` prints only the product version and does not delegate. To
+# see the OpenSSL base version, run the genuine `openssl version` directly.
+case "$1" in
+    version|-version|--version|-v)
+        echo "QudoSSL ${QUDO_PRODUCT_VERSION}"
+        exit 0
+        ;;
+esac
+
+exec "$openssl_bin" "$@"

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libperf.a CMakeFiles/perf.dir/perflib/perfhelper.c.o CMakeFiles/perf.dir/perflib/perfsslhelper.c.o CMakeFiles/perf.dir/perflib/threads.c.o CMakeFiles/perf.dir/perflib/time.c.o
+/usr/bin/ranlib libperf.a
