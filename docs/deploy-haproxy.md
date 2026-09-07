@@ -35,15 +35,20 @@ Building HAProxy from source needs a C toolchain and, for the flags below, the
 PCRE2 and zlib development headers:
 
 ```sh
-sudo apt-get install -y build-essential libpcre2-dev zlib1g-dev   # Debian/Ubuntu
+sudo apt-get install -y build-essential libpcre2-dev zlib1g-dev curl   # Debian/Ubuntu
 ```
 
-Then build against QudoSSL's OpenSSL:
+Download and unpack the HAProxy source (2.8+; **3.x LTS recommended** for
+`ssl-default-bind-curves`), then build it against QudoSSL's OpenSSL:
 
 ```sh
 export QUDOSSL_PREFIX=/opt/qudossl
 
-# from the HAProxy source tree
+# Download the HAProxy source — pin the current patch release from haproxy.org:
+HAPROXY_VER=3.0.6
+curl -fsSLO "https://www.haproxy.org/download/3.0/src/haproxy-${HAPROXY_VER}.tar.gz"
+tar xf "haproxy-${HAPROXY_VER}.tar.gz" && cd "haproxy-${HAPROXY_VER}"
+
 make -j"$(nproc)" \
     TARGET=linux-glibc \
     USE_OPENSSL=1 USE_PCRE2=1 USE_PCRE2_JIT=1 USE_ZLIB=1 USE_THREAD=1 USE_PROMEX=1 \
@@ -117,10 +122,12 @@ global
 
 frontend https_in
     bind :443 ssl crt /etc/haproxy/certs/server.pem alpn h2,http/1.1
-    # Surface the negotiated group, protocol and cipher for verification.
-    http-request set-header X-TLS-Group    %[ssl_fc_curve]
-    http-request set-header X-TLS-Protocol %[ssl_fc_protocol]
-    http-request set-header X-TLS-Cipher   %[ssl_fc_cipher]
+    # Surface the negotiated group, protocol and cipher to the CLIENT for
+    # verification. Use http-RESPONSE: http-request headers go to the backend,
+    # so `curl -sI` (which reads the response) would never see them.
+    http-response set-header X-TLS-Group    %[ssl_fc_curve]
+    http-response set-header X-TLS-Protocol %[ssl_fc_protocol]
+    http-response set-header X-TLS-Cipher   %[ssl_fc_cipher]
     default_backend app_servers
 
 backend app_servers
@@ -159,12 +166,20 @@ qudossl s_client -connect your.host:443 -groups X25519MLKEM768 -tls1_3 -brief </
 # Negotiated TLS1.3 group: X25519MLKEM768
 ```
 
-Or from `curl`, if you exported the header in step 4:
+Or from `curl`, if you exported the header in step 4 — but note the value
+depends on the **client's** capability:
 
 ```sh
 curl -sI https://your.host/ | grep -i x-tls-group
-# X-TLS-Group: X25519MLKEM768
+# X-TLS-Group: SECP256R1        ← from a classical client such as curl/your browser
+# X-TLS-Group: X25519MLKEM768   ← from a PQC-capable client
 ```
+
+A classical client (curl, most browsers today) negotiates a classical curve, so
+the header shows `SECP256R1` even though the server offered ML-KEM first — that
+is post-quantum readiness with a safe classical fallback, not a misconfiguration.
+Unlike nginx (whose `$ssl_curve` prints the IANA codepoint `0x11ec`), HAProxy's
+`%[ssl_fc_curve]` prints the readable **name** `X25519MLKEM768` for the hybrid.
 
 > **Curve name spelling.** HAProxy's `%[ssl_fc_curve]` prints the classical P-256
 > curve as `SECP256R1`; nginx prints the same curve as `prime256v1`. Same curve,
@@ -179,6 +194,15 @@ OPENSSL_MODULES=/opt/qudossl/lib/ossl-modules \
 #   base   name: OpenSSL Base Provider
 #   fips   name: OpenSSL FIPS Provider
 ```
+
+> **Runnable reference.** For a complete, self-contained example that performs
+> every step above end to end — build HAProxy against QudoSSL, add the
+> `ssl-default-bind-curves` line, and verify `X25519MLKEM768` is negotiated
+> (standard *and* FIPS builds) — see the
+> **[qudossl-haproxy-demo](https://github.com/ZenVInnovations/qudossl-migration-demos/tree/main/qudossl-haproxy-demo)**
+> in the [qudossl-migration-demos](https://github.com/ZenVInnovations/qudossl-migration-demos)
+> repo. Its `scripts/verify-qudossl.sh` runs exactly the checks in this section
+> and prints a PASS/FAIL result. (Demonstration material only — not for production.)
 
 ---
 
@@ -201,3 +225,4 @@ OPENSSL_MODULES=/opt/qudossl/lib/ossl-modules \
 - [deploy-nginx.md](deploy-nginx.md) — the same, for nginx.
 - [fips-mode.md](fips-mode.md) — the post-quantum groups and FIPS posture in full.
 - [crypto-officer-guide.md](crypto-officer-guide.md) — operating the FIPS provider correctly.
+- [qudossl-haproxy-demo](https://github.com/ZenVInnovations/qudossl-migration-demos/tree/main/qudossl-haproxy-demo) — a runnable, Dockerized reference for this whole procedure, with automated TLS-termination verification (demonstration material only).
