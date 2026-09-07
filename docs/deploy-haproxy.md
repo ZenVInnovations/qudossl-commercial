@@ -35,15 +35,20 @@ Building HAProxy from source needs a C toolchain and, for the flags below, the
 PCRE2 and zlib development headers:
 
 ```sh
-sudo apt-get install -y build-essential libpcre2-dev zlib1g-dev   # Debian/Ubuntu
+sudo apt-get install -y build-essential libpcre2-dev zlib1g-dev curl   # Debian/Ubuntu
 ```
 
-Then build against QudoSSL's OpenSSL:
+Download and unpack the HAProxy source (2.8+; **3.x LTS recommended** for
+`ssl-default-bind-curves`), then build it against QudoSSL's OpenSSL:
 
 ```sh
 export QUDOSSL_PREFIX=/opt/qudossl
 
-# from the HAProxy source tree
+# Download the HAProxy source — pin the current patch release from haproxy.org:
+HAPROXY_VER=3.0.6
+curl -fsSLO "https://www.haproxy.org/download/3.0/src/haproxy-${HAPROXY_VER}.tar.gz"
+tar xf "haproxy-${HAPROXY_VER}.tar.gz" && cd "haproxy-${HAPROXY_VER}"
+
 make -j"$(nproc)" \
     TARGET=linux-glibc \
     USE_OPENSSL=1 USE_PCRE2=1 USE_PCRE2_JIT=1 USE_ZLIB=1 USE_THREAD=1 USE_PROMEX=1 \
