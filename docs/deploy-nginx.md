@@ -202,13 +202,24 @@ qudossl s_client -connect your.host:443 -groups X25519MLKEM768 -tls1_3 -brief </
 # Negotiated TLS1.3 group: X25519MLKEM768
 ```
 
-Or, if you exported the header in step 4, straight from `curl`:
+The `qudossl s_client` output is the **authoritative** name check. If you
+exported the header in step 4, `curl` shows the group too — but read it
+carefully:
 
 ```sh
 curl -sI https://your.host/ | grep -i x-tls-group
-# X-TLS-Group: X25519MLKEM768
+# X-TLS-Group: prime256v1   ← from a classical client such as curl/your browser
+# X-TLS-Group: 0x11ec       ← from a PQC-capable client (0x11ec = X25519MLKEM768)
 ```
 
+> **The header reflects the *client's* negotiated group, and `$ssl_curve` never
+> prints the ML-KEM name.** A classical client (curl, most browsers today)
+> negotiates a classical curve, so the header shows `prime256v1` even though the
+> server offered ML-KEM first — that is post-quantum readiness working, with a
+> safe classical fallback, not a misconfiguration. A PQC-capable client
+> negotiates the hybrid, and nginx then prints its **IANA codepoint** `0x11ec`,
+> not `X25519MLKEM768`. To read the group *name*, use `qudossl s_client` above.
+>
 > **Curve name spelling.** nginx's `$ssl_curve` prints the classical P-256 curve
 > as `prime256v1`; HAProxy prints the same curve as `SECP256R1`. Same curve,
 > different spelling — don't treat the difference as a bug.
@@ -223,6 +234,14 @@ OPENSSL_MODULES=/opt/qudossl/lib/ossl-modules \
 #   fips   name: OpenSSL FIPS Provider
 ```
 
+> **Runnable reference.** For a complete, self-contained example that performs
+> every step above end to end — build nginx against QudoSSL, add the group line,
+> and verify `X25519MLKEM768` is negotiated (standard *and* FIPS builds) — see the
+> **[qudossl-nginx-demo](https://github.com/ZenVInnovations/qudossl-migration-demos/tree/main/qudossl-nginx-demo)**
+> in the [qudossl-migration-demos](https://github.com/ZenVInnovations/qudossl-migration-demos)
+> repo. Its `scripts/verify-qudossl.sh` runs exactly the checks in this section
+> and prints a PASS/FAIL result. (Demonstration material only — not for production.)
+
 ---
 
 ## 7. Troubleshooting
@@ -232,7 +251,7 @@ OPENSSL_MODULES=/opt/qudossl/lib/ossl-modules \
 | `nginx: not linked against QudoSSL` (the `ldd` gate) | Built against distro OpenSSL. Rebuild with the `--with-ld-opt` line from §2, RPATH included. |
 | nginx starts but no ML-KEM group is ever negotiated | nginx bound to the distro `libssl.so.3` at runtime (missing RPATH), or the client didn't offer an ML-KEM group. Check `ldd $(command -v nginx)`; test with `qudossl s_client -groups X25519MLKEM768`. |
 | nginx fails to start after adding groups | A bare `x25519`/`x448`/brainpool in the `Groups` list under FIPS — OpenSSL rejects the whole list. Remove the standalone curve; keep the hybrid. |
-| `X-TLS-Group` empty for a classical client | Expected — a purely classical handshake sets `$ssl_curve` to the classical curve (`prime256v1`), not an ML-KEM name. Match by name. |
+| `X-TLS-Group` shows `prime256v1` or `0x11ec`, not `X25519MLKEM768` | Expected — the header reflects the *client's* group, and `$ssl_curve` never prints the ML-KEM name: a classical client shows `prime256v1`, a PQC client shows codepoint `0x11ec`. Use `qudossl s_client -groups X25519MLKEM768` for the name. |
 | FIPS not active (`list -providers` shows only `default`) | `OPENSSL_CONF`/`OPENSSL_MODULES` not set in the *service* environment, or the config's `.include` kept a literal `$PREFIX`. See [installation.md](installation.md) §5. |
 
 ---
@@ -243,3 +262,4 @@ OPENSSL_MODULES=/opt/qudossl/lib/ossl-modules \
 - [deploy-haproxy.md](deploy-haproxy.md) — the same, for HAProxy.
 - [fips-mode.md](fips-mode.md) — the post-quantum groups and FIPS posture in full.
 - [crypto-officer-guide.md](crypto-officer-guide.md) — operating the FIPS provider correctly.
+- [qudossl-nginx-demo](https://github.com/ZenVInnovations/qudossl-migration-demos/tree/main/qudossl-nginx-demo) — a runnable, Dockerized reference for this whole procedure, with automated TLS-termination verification (demonstration material only).
