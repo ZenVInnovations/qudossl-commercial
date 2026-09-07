@@ -46,7 +46,7 @@ CONFIG_OPTS ?= enable-fips
 EXTRA_FLAGS ?=
 
 .PHONY: all help openssl openssl-config test install install_sw install_fips \
-        fips-src fips-module verify-pristine clean distclean
+        fips-src fips-module verify-pristine clean distclean dist dist-verify
 
 all: openssl
 
@@ -61,6 +61,8 @@ help:
 	@echo "  make install_fips     install the 3.5.4 module + fipsinstall (run after 'make install')"
 	@echo "  make test             upstream's own test suite"
 	@echo "  make verify-pristine  prove both vendored trees are unmodified upstream"
+	@echo "  make dist             cut the source tarball from git HEADs (ADR-0008)"
+	@echo "  make dist-verify      build + acceptance-check the tarball, as a customer would"
 	@echo "  make clean|distclean"
 	@echo
 	@echo "  PREFIX=$(PREFIX)"
@@ -86,7 +88,9 @@ verify-pristine:
 	  bm=$$(sed -n 's/^BUILD_METADATA=//p' "$$tree/VERSION.dat" 2>/dev/null); \
 	  if [ -n "$$bm" ]; then echo "  FAIL $$tree: VERSION.dat BUILD_METADATA=$$bm (must be empty)"; bad=1; fi; \
 	done; \
-	if [ -f "$(OPENSSL_FIPS)/Configure" ] && ! git -C "$(OPENSSL_FIPS)" diff --quiet 2>/dev/null; then \
+	if [ -f "$(OPENSSL_FIPS)/Configure" ] \
+	    && git -C "$(OPENSSL_FIPS)" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+	    && ! git -C "$(OPENSSL_FIPS)" diff --quiet 2>/dev/null; then \
 	  echo "  FAIL openssl-fips: submodule working tree differs from its pinned commit"; bad=1; fi; \
 	if [ "$$bad" = "0" ]; then echo "  OK — vendored trees are unmodified upstream"; else exit 1; fi
 
@@ -100,8 +104,9 @@ openssl-config: $(OPENSSL)/configdata.pm
 # Configure bakes PREFIX into configdata.pm, so a changed PREFIX must
 # reconfigure or the install lands in the previous location.
 openssl: openssl-config
-	@if ! grep -q -- '--prefix=$(PREFIX)' $(OPENSSL)/configdata.pm 2>/dev/null; then \
-	  echo "==> PREFIX changed; reconfiguring"; \
+	@if ! grep -q -- '--prefix=$(PREFIX)' $(OPENSSL)/configdata.pm 2>/dev/null \
+	    || grep -qE '\+qudo|QudoSSL' $(OPENSSL)/configdata.pm 2>/dev/null; then \
+	  echo "==> PREFIX changed or foreign build metadata found; reconfiguring"; \
 	  cd $(OPENSSL) && ./Configure $(CONFIG_OPTS) \
 	      --prefix=$(PREFIX) --libdir=$(LIBDIR) $(EXTRA_FLAGS); \
 	fi
@@ -141,7 +146,15 @@ $(OPENSSL_FIPS)/configdata.pm: $(OPENSSL_FIPS)/Configure
 	cd $(OPENSSL_FIPS) && ./Configure enable-fips \
 	    --prefix=$(PREFIX) --libdir=$(LIBDIR) $(EXTRA_FLAGS)
 
-fips-module: $(OPENSSL_FIPS)/configdata.pm
+fips-module: $(OPENSSL_FIPS)/Configure
+	@# A configdata.pm carrying a +qudo stamp or QudoSSL branding was generated
+	@# by some other tree's configuration (paths alone always contain "qudo" —
+	@# match only the stamp/brand). Discard it so the module rebuilds pristine.
+	@if grep -qE '\+qudo|QudoSSL' "$(OPENSSL_FIPS)/configdata.pm" 2>/dev/null; then \
+	  echo "==> foreign build metadata in openssl-fips/configdata.pm — discarding for a pristine reconfigure"; \
+	  rm -f "$(OPENSSL_FIPS)/configdata.pm"; \
+	fi
+	@$(MAKE) --no-print-directory $(OPENSSL_FIPS)/configdata.pm
 	@echo "==> building the 3.5.4 FIPS module with $(JOBS) jobs"
 	$(MAKE) -C $(OPENSSL_FIPS) -j$(JOBS) build_generated
 	$(MAKE) -C $(OPENSSL_FIPS) -j$(JOBS) providers/fips.$(MODEXT)
@@ -159,9 +172,23 @@ install_fips: fips-module
 	# so ensure it exists before fipsinstall writes fipsmodule.cnf into it.
 	install -d "$(PREFIX)/ssl"
 	install -m 0755 "$(OPENSSL_FIPS)/providers/fips.$(MODEXT)" "$(MODULESDIR)/fips.$(MODEXT)"
+	# Sanitised environment: an inherited OPENSSL_CONF/OPENSSL_MODULES (e.g.
+	# from a previous install's shell exports) makes fipsinstall auto-load
+	# THAT install's providers and print their identity — confusing output,
+	# and exactly the wrong thing during an install.
+	env -u OPENSSL_CONF -u OPENSSL_MODULES \
 	"$(PREFIX)/bin/openssl" fipsinstall \
 	    -module "$(MODULESDIR)/fips.$(MODEXT)" \
 	    -out "$(PREFIX)/ssl/fipsmodule.cnf"
+	@# Artefact assertion — the pristine gate checks sources; this checks the
+	@# BUILT module actually installed. Catches a stale/branded fips.$(MODEXT)
+	@# left in the submodule build dir by an earlier foreign configuration.
+	@strings "$(MODULESDIR)/fips.$(MODEXT)" | grep -q '^OpenSSL FIPS Provider$$' || \
+	  { echo "FATAL: installed module does not identify as 'OpenSSL FIPS Provider' — stale artefact?" >&2; exit 1; }
+	@strings "$(MODULESDIR)/fips.$(MODEXT)" | grep -q '^3\.5\.4$$' || \
+	  { echo "FATAL: installed module does not carry version 3.5.4 (validated boundary)" >&2; exit 1; }
+	@! strings "$(MODULESDIR)/fips.$(MODEXT)" | grep -qE '\+qudo|QudoSSL' || \
+	  { echo "FATAL: installed module carries vendor stamping/branding — not a pristine build" >&2; exit 1; }
 	@echo "==> FIPS module: OpenSSL 3.5.4 (validated boundary) installed in $(MODULESDIR)"
 
 # The product's CLI is `qudossl`, installed as a wrapper next to the upstream
@@ -192,3 +219,60 @@ distclean:
 	-$(MAKE) -C $(OPENSSL) distclean
 	-$(MAKE) -C $(OPENSSL_FIPS) distclean
 	-rm -f $(OPENSSL)/configdata.pm $(OPENSSL_FIPS)/configdata.pm
+
+# ---------------------------------------------------------------- source dist
+# OpenSSL-style source distribution (ADR-0008): an immutable tarball cut from
+# git HEADs — the repo (with the 3.5.7 subtree) via `git archive`, plus the
+# FIPS submodule's pinned 3.5.4 content exported the same way, because
+# `git archive` emits submodules as empty directories. Cutting from HEADs
+# means working-tree dirt and stale build artefacts can never leak into what
+# a customer unpacks; the tarball is fully self-contained (no git, no
+# submodule access needed). Deterministic where the host tar allows (GNU tar);
+# the canonical release artefact is produced by the release workflow on Linux.
+DIST_VERSION := $(shell sed -n 's/^QUDO_PRODUCT_VERSION="\(.*\)"/\1/p' $(ROOT)/build/qudossl)
+DIST_NAME    := qudossl-commercial-$(DIST_VERSION)
+DIST_DIR     := $(ROOT)/dist
+SOURCE_EPOCH := $(shell git -C $(ROOT) log -1 --format=%ct 2>/dev/null || echo 0)
+
+dist: $(OPENSSL_FIPS)/Configure
+	@test -n "$(DIST_VERSION)" || \
+	  { echo "dist: cannot read QUDO_PRODUCT_VERSION from build/qudossl" >&2; exit 1; }
+	@if tag=$$(git -C $(ROOT) describe --tags --exact-match 2>/dev/null); then \
+	  if [ "$$tag" != "$(DIST_NAME)" ]; then \
+	    echo "dist: HEAD tag '$$tag' != '$(DIST_NAME)' (from the wrapper's QUDO_PRODUCT_VERSION)" >&2; \
+	    exit 1; fi; \
+	else \
+	  echo "==> note: HEAD is untagged — building a SNAPSHOT (tag $(DIST_NAME) for a release)"; \
+	fi
+	@if [ -n "$$(git -C $(ROOT) status --porcelain)" ]; then \
+	  echo "==> note: working tree is dirty; the tarball is cut from committed HEADs and ignores it"; \
+	fi
+	@git -C $(ROOT) submodule status openssl-fips | grep -q '^ ' || \
+	  { echo "dist: openssl-fips checkout is not at the pinned commit" >&2; exit 1; }
+	@echo "==> staging $(DIST_NAME) from git HEADs"
+	rm -rf "$(DIST_DIR)/$(DIST_NAME)"
+	mkdir -p "$(DIST_DIR)/$(DIST_NAME)"
+	git -C $(ROOT) archive --format=tar HEAD | tar -x -C "$(DIST_DIR)/$(DIST_NAME)"
+	mkdir -p "$(DIST_DIR)/$(DIST_NAME)/openssl-fips"
+	git -C $(OPENSSL_FIPS) archive --format=tar HEAD | tar -x -C "$(DIST_DIR)/$(DIST_NAME)/openssl-fips"
+	@echo "==> normalising timestamps to the HEAD commit date"
+	@stamp=$$(perl -e '@t = gmtime($(SOURCE_EPOCH)); \
+	  printf "%04d%02d%02d%02d%02d.%02d", $$t[5]+1900, $$t[4]+1, $$t[3], $$t[2], $$t[1], $$t[0]'); \
+	TZ=UTC find "$(DIST_DIR)/$(DIST_NAME)" -exec touch -t "$$stamp" {} +
+	@echo "==> packing $(DIST_NAME)-src.tar.gz"
+	@if tar --version 2>/dev/null | grep -q GNU; then \
+	  tar --sort=name --owner=0 --group=0 --numeric-owner \
+	      -C "$(DIST_DIR)" -czf "$(DIST_DIR)/$(DIST_NAME)-src.tar.gz" "$(DIST_NAME)"; \
+	else \
+	  (cd "$(DIST_DIR)" && find "$(DIST_NAME)" | sort | \
+	    COPYFILE_DISABLE=1 tar -czf "$(DIST_NAME)-src.tar.gz" --uid 0 --gid 0 -n -T -); \
+	fi
+	(cd "$(DIST_DIR)" && shasum -a 256 "$(DIST_NAME)-src.tar.gz" > "$(DIST_NAME)-src.tar.gz.sha256")
+	rm -rf "$(DIST_DIR)/$(DIST_NAME)"
+	@echo "==> $(DIST_DIR)/$(DIST_NAME)-src.tar.gz"
+	@cat "$(DIST_DIR)/$(DIST_NAME)-src.tar.gz.sha256"
+
+# Build + install + acceptance-check FROM THE TARBALL — the artefact customers
+# actually receive — into a scratch prefix, with a sanitised environment.
+dist-verify:
+	@bash "$(ROOT)/build/dist-verify.sh" "$(DIST_DIR)/$(DIST_NAME)-src.tar.gz"

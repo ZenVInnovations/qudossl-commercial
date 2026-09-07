@@ -111,3 +111,6 @@ openssl/ssl/fipsmodule.cnf
 *.docx
 # Local pre-submodule backup of the 3.5.4 tree.
 /openssl-fips.local.bak/
+
+# --- source distribution output ---------------------------------------------
+/dist/

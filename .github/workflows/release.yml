@@ -1,0 +1,54 @@
+# Release — build, verify and publish the QudoSSL Commercial source tarball.
+#
+# Triggered by pushing a signed annotated tag `qudossl-commercial-X.Y.Z`
+# (or manually, which produces a snapshot without publishing a release).
+# The tarball is cut from git HEADs and verified end-to-end from the unpacked
+# archive (build, install_sw, install_fips, acceptance checks, PQ handshake)
+# before anything is published — see docs/adr/ADR-0008.
+#
+# Signing is deliberately NOT done here: the release key is not stored in CI.
+# After the release is created, release engineering downloads the tarball,
+# signs it (gpg --detach-sign --armor), and uploads the .asc as an asset.
+name: Release
+
+on:
+  push:
+    tags: ['qudossl-commercial-*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build the source tarball (from git HEADs)
+        run: make -C build dist
+
+      - name: Verify the tarball end-to-end (the release gate)
+        run: make -C build dist-verify
+
+      - name: Publish GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/qudossl-commercial-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*-src.tar.gz dist/*-src.tar.gz.sha256 \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes "QudoSSL Commercial source distribution. Verify: \`shasum -a 256 -c $GITHUB_REF_NAME-src.tar.gz.sha256\`. Build per the migration handbook: \`tar xf $GITHUB_REF_NAME-src.tar.gz && make -C qudossl-commercial-*/build all\`."
+
+      - name: Keep snapshot tarball as a workflow artifact (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-tarball
+          path: |
+            dist/*-src.tar.gz
+            dist/*-src.tar.gz.sha256
