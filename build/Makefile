@@ -163,10 +163,11 @@ fips-module: $(OPENSSL_FIPS)/Configure
 # `openssl fipsinstall` with the installed 3.5.7 binary against the 3.5.4 module
 # -- the cross-version step OpenSSL supports. It runs the module's power-on
 # self-tests and writes fipsmodule.cnf with the MAC of this exact binary. Run
-# `make install` first so the openssl binary and libraries are in place.
+# `make install_sw` first so the openssl binary and libraries are in place --
+# NOT `make install`, which with enable-fips also installs the 3.5.7 module.
 install_fips: fips-module
 	@[ -x "$(PREFIX)/bin/openssl" ] || { \
-	  echo "install_fips: no openssl at $(PREFIX)/bin -- run 'make install' first" >&2; exit 1; }
+	  echo "install_fips: no openssl at $(PREFIX)/bin -- run 'make install_sw' first" >&2; exit 1; }
 	install -d "$(MODULESDIR)"
 	# `install_sw` does not create the ssl config dir (that is `install_ssldirs`),
 	# so ensure it exists before fipsinstall writes fipsmodule.cnf into it.

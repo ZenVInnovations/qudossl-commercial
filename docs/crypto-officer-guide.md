@@ -40,12 +40,25 @@ delegates unchanged — see `README.md` and
 
 ---
 
-## 2. `fipsinstall` — the Crypto Officer's one-time step
+## 2. `fipsinstall` — the Crypto Officer's per-host step
 
 `fipsinstall` runs the FIPS module's **power-on self-tests** once and, on
 success, writes `fipsmodule.cnf` — the module's integrity record (its MAC and
 install status). It does not modify the module; it records that the module on
 this host passed its self-tests.
+
+> **Run it on every host — never copy `fipsmodule.cnf` between machines.**
+> Upstream is explicit: *"The FIPS module must have the self tests run, and the
+> FIPS module config file output generated on every machine that it is to be
+> used on … you must not copy the FIPS module config file output data from one
+> machine to another"* ([`README-FIPS.md`][readme-fips]). `fipsmodule.cnf`
+> records the MAC of the module **as installed on this host** and the fact that
+> *this* host ran the self-tests. A copied file attests to a machine that was
+> never tested, and a golden image or container layer that bakes one in ships
+> that false attestation to every host built from it. Generate it in the
+> per-host provisioning step, not in the image build.
+
+[readme-fips]: https://github.com/openssl/openssl/blob/master/README-FIPS.md
 
 The module filename differs by platform, so set it once:
 
