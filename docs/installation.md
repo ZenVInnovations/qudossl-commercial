@@ -98,7 +98,8 @@ Useful targets:
 |---|---|
 | `all` | configure and build the 3.5.7 libraries and app |
 | `install` | libraries, headers, both CLI names, the stock `openssl.cnf`, ~2000 man pages **and — because the tree is `enable-fips` — the 3.5.7 FIPS module**, which is *not* the validated boundary. Prefer `install_sw`. |
-| `install_sw` | as above, without the man pages |
+| `install_sw` | libraries, headers and both CLI names **only** — no config dir, no man pages, no FIPS module. This is the target to use. |
+| `install_ssldirs` | the config dir: stock `openssl.cnf` plus `certs/`, `private/`, `misc/`, `ct/`. Required by **both** standard and FIPS installs — without it `openssl req` fails. Does not overwrite an existing `openssl.cnf`. |
 | `fips-src` | fetch the pinned 3.5.4 FIPS submodule — network once |
 | `fips-module` | build the 3.5.4 FIPS module (the validated boundary) |
 | `install_fips` | build + install the 3.5.4 FIPS module and run `fipsinstall` — **run `install_sw` first**; it fails without it |
@@ -127,10 +128,36 @@ fetched, `openssl-fips/`. See [subtree-pins.md](subtree-pins.md).
 ## 4. Install and put it on your PATH
 
 ```sh
-make -C build install_sw   PREFIX="$PREFIX"    # libs, headers, openssl + qudossl
-make -C build install_fips PREFIX="$PREFIX"    # fips module + fipsmodule.cnf
-                                               # first FIPS install fetches the 3.5.4 submodule (network once)
+make -C build install_sw       PREFIX="$PREFIX"   # libs, headers, openssl + qudossl
+make -C build install_ssldirs  PREFIX="$PREFIX"   # openssl.cnf + certs/ private/ misc/ ct/
+make -C build install_fips     PREFIX="$PREFIX"   # fips module + fipsmodule.cnf
+                                                  # first FIPS install fetches the 3.5.4 submodule (network once)
 ```
+
+For a **standard (non-FIPS) install**, drop the last line. The first two are
+required in both cases, in this order — which is upstream's own ordering in
+`install`.
+
+`install_sw` installs no configuration at all, so without `install_ssldirs` the
+apps that read one fail: `openssl req` aborts because it cannot open
+`openssl.cnf`. That applies to a FIPS install as much as a standard one.
+
+`install_ssldirs` does **not** weaken FIPS mode. A process with no
+`OPENSSL_CONF` set loads the default provider whether or not `openssl.cnf`
+exists — measured, identical either way. The protection is setting
+`OPENSSL_CONF` to the FIPS configuration, never the absence of a file. The two
+targets do not interfere: `install_ssldirs` will not overwrite an existing
+`openssl.cnf`, so it is safe to re-run.
+
+Note what it does **not** do: `certs/` and `private/` are created **empty**, and
+upstream ships no CA bundle. Neither install has a populated default trust
+store, so anything doing outbound TLS must supply trust explicitly —
+`SSL_CERT_FILE`, `SSL_CERT_DIR`, or `-CAfile` — or populate `$PREFIX/ssl/certs`
+from your own CA source.
+
+Do **not** use `make install` as a shortcut — with this `enable-fips` tree it also
+installs the **3.5.7** FIPS module, which is not the validated 3.5.4 boundary this
+product ships.
 
 Use `sudo` on both if your prefix is outside your home directory. Then put the
 prefix's `bin/` on your PATH:

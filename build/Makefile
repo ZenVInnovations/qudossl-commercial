@@ -45,7 +45,7 @@ endif
 CONFIG_OPTS ?= enable-fips
 EXTRA_FLAGS ?=
 
-.PHONY: all help openssl openssl-config test install install_sw install_fips \
+.PHONY: all help openssl openssl-config test install install_sw install_ssldirs install_fips \
         fips-src fips-module verify-pristine clean distclean dist dist-verify
 
 all: openssl
@@ -54,8 +54,9 @@ help:
 	@echo "QudoSSL Commercial — OpenSSL 3.5.7 libraries + OpenSSL 3.5.4 FIPS module (ADR-0006)"
 	@echo
 	@echo "  make all              configure and build the 3.5.7 libraries + app"
-	@echo "  make install          libs, headers, CLI (qudossl + openssl), man pages"
-	@echo "  make install_sw       as above without ~2000 man pages"
+	@echo "  make install          libs, headers, CLI, config dir, man pages, 3.5.7 FIPS module"
+	@echo "  make install_sw       libs, headers, CLI only -- no config dir, no man pages, no FIPS"
+	@echo "  make install_ssldirs  the config dir: openssl.cnf + certs/ private/ misc/ ct/"
 	@echo "  make fips-src         fetch the pinned 3.5.4 FIPS submodule (thin fork)"
 	@echo "  make fips-module      build the 3.5.4 FIPS module (validated boundary)"
 	@echo "  make install_fips     install the 3.5.4 module + fipsinstall (run after 'make install')"
@@ -124,6 +125,15 @@ install_sw: openssl
 	$(MAKE) -C $(OPENSSL) install_sw
 	@$(MAKE) --no-print-directory install-cli
 
+# `install_sw` deliberately installs no configuration: upstream splits that into
+# `install_ssldirs`, which creates $(PREFIX)/ssl with certs/, private/, misc/ and
+# ct/ and installs the stock openssl.cnf. A standard (non-FIPS) install needs it
+# -- without openssl.cnf the apps that read one fail (`openssl req` aborts), and
+# without certs/ there is no default trust store for SSL_CTX_set_default_verify_paths.
+# Passed through so callers use the upstream target instead of copying files by hand.
+install_ssldirs: openssl
+	$(MAKE) -C $(OPENSSL) install_ssldirs
+
 # ---------------------------------------------------------------- FIPS module
 # The FIPS module comes from openssl-fips/ (tag openssl-3.5.4, the version under
 # CMVP validation), NOT from the 3.5.7 library tree. It runs under the 3.5.7
@@ -170,7 +180,8 @@ install_fips: fips-module
 	  echo "install_fips: no openssl at $(PREFIX)/bin -- run 'make install_sw' first" >&2; exit 1; }
 	install -d "$(MODULESDIR)"
 	# `install_sw` does not create the ssl config dir (that is `install_ssldirs`),
-	# so ensure it exists before fipsinstall writes fipsmodule.cnf into it.
+	# so ensure it exists before fipsinstall writes fipsmodule.cnf into it. This
+	# is the directory only -- a FIPS install does not need the stock openssl.cnf.
 	install -d "$(PREFIX)/ssl"
 	install -m 0755 "$(OPENSSL_FIPS)/providers/fips.$(MODEXT)" "$(MODULESDIR)/fips.$(MODEXT)"
 	# Sanitised environment: an inherited OPENSSL_CONF/OPENSSL_MODULES (e.g.
