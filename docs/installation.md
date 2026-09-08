@@ -97,11 +97,11 @@ Useful targets:
 | Target | Does |
 |---|---|
 | `all` | configure and build the 3.5.7 libraries and app |
-| `install` | libraries, headers, both CLI names, **and** ~2000 man pages |
+| `install` | libraries, headers, both CLI names, the stock `openssl.cnf`, ~2000 man pages **and — because the tree is `enable-fips` — the 3.5.7 FIPS module**, which is *not* the validated boundary. Prefer `install_sw`. |
 | `install_sw` | as above, without the man pages |
 | `fips-src` | fetch the pinned 3.5.4 FIPS submodule — network once |
 | `fips-module` | build the 3.5.4 FIPS module (the validated boundary) |
-| `install_fips` | build + install the 3.5.4 FIPS module and run `fipsinstall` (do it after `install`/`install_sw`) |
+| `install_fips` | build + install the 3.5.4 FIPS module and run `fipsinstall` — **run `install_sw` first**; it fails without it |
 | `test` | upstream's own test suite |
 | `verify-pristine` | prove the vendored trees carry no vendor modifications |
 | `clean` / `distclean` | remove build products |
@@ -149,6 +149,13 @@ which -a qudossl openssl        # both must resolve under $PREFIX/bin first
 ---
 
 ## 5. Enable FIPS mode
+
+> **Per host, every host.** `fipsmodule.cnf` records the MAC of the module as
+> installed *on this machine*, and that this machine ran the self-tests.
+> Upstream requires the tests to run and the file to be generated "on every
+> machine that it is to be used on", and forbids copying it between machines.
+> Run `make install_fips` (or `qudossl fipsinstall`) on each host; do not bake
+> the file into a golden image or container layer.
 
 `make install_fips` **already ran** `fipsinstall` for you: it created
 `$PREFIX/ssl/fipsmodule.cnf` (the module's integrity record) and its self-tests
