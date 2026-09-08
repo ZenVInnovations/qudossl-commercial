@@ -140,11 +140,22 @@ make -C build install_sw       PREFIX="$PREFIX"
 make -C build install_ssldirs  PREFIX="$PREFIX"   # openssl.cnf + certs/ private/ misc/ ct/
 ```
 
-`install_sw` installs no configuration at all. Without `install_ssldirs` the apps
-that read a config fail (`openssl req` aborts because it cannot open
-`openssl.cnf`), and there is no `certs/` for the default trust store. A FIPS
-install does not need it: `install_fips` creates the directory and writes
-`fipsmodule.cnf`, and you supply the FIPS config yourself.
+`install_sw` installs no configuration at all, so without `install_ssldirs` the
+apps that read one fail — `openssl req` aborts because it cannot open
+`openssl.cnf`.
+
+A **FIPS install does not use `install_ssldirs`**, and should not. `install_fips`
+already creates `$PREFIX/ssl` for `fipsmodule.cnf`, and you write the FIPS
+configuration yourself. Adding `install_ssldirs` would drop upstream's stock
+**non-FIPS** `openssl.cnf` into the same directory — a decoy: any process that
+starts without `OPENSSL_CONF` set would load it and run the default provider,
+silently outside approved mode.
+
+Note what `install_ssldirs` does **not** do: it creates `certs/` and `private/`
+**empty**. Upstream ships no CA bundle, so neither install has a populated
+default trust store. Anything doing outbound TLS must supply trust explicitly —
+`SSL_CERT_FILE`, `SSL_CERT_DIR`, or `-CAfile` — or populate `$PREFIX/ssl/certs`
+from your own CA source.
 
 Do **not** use `make install` as a shortcut — with this `enable-fips` tree it also
 installs the **3.5.7** FIPS module, which is not the validated 3.5.4 boundary this
