@@ -98,7 +98,8 @@ Useful targets:
 |---|---|
 | `all` | configure and build the 3.5.7 libraries and app |
 | `install` | libraries, headers, both CLI names, the stock `openssl.cnf`, ~2000 man pages **and — because the tree is `enable-fips` — the 3.5.7 FIPS module**, which is *not* the validated boundary. Prefer `install_sw`. |
-| `install_sw` | as above, without the man pages |
+| `install_sw` | libraries, headers and both CLI names **only** — no config dir, no man pages, no FIPS module. This is the target to use. |
+| `install_ssldirs` | the config dir: stock `openssl.cnf` plus `certs/`, `private/`, `misc/`, `ct/`. Needed by a **standard** install; a FIPS install gets the directory from `install_fips`. |
 | `fips-src` | fetch the pinned 3.5.4 FIPS submodule — network once |
 | `fips-module` | build the 3.5.4 FIPS module (the validated boundary) |
 | `install_fips` | build + install the 3.5.4 FIPS module and run `fipsinstall` — **run `install_sw` first**; it fails without it |
@@ -131,6 +132,23 @@ make -C build install_sw   PREFIX="$PREFIX"    # libs, headers, openssl + qudoss
 make -C build install_fips PREFIX="$PREFIX"    # fips module + fipsmodule.cnf
                                                # first FIPS install fetches the 3.5.4 submodule (network once)
 ```
+
+For a **standard (non-FIPS) install**, replace `install_fips` with `install_ssldirs`:
+
+```sh
+make -C build install_sw       PREFIX="$PREFIX"
+make -C build install_ssldirs  PREFIX="$PREFIX"   # openssl.cnf + certs/ private/ misc/ ct/
+```
+
+`install_sw` installs no configuration at all. Without `install_ssldirs` the apps
+that read a config fail (`openssl req` aborts because it cannot open
+`openssl.cnf`), and there is no `certs/` for the default trust store. A FIPS
+install does not need it: `install_fips` creates the directory and writes
+`fipsmodule.cnf`, and you supply the FIPS config yourself.
+
+Do **not** use `make install` as a shortcut — with this `enable-fips` tree it also
+installs the **3.5.7** FIPS module, which is not the validated 3.5.4 boundary this
+product ships.
 
 Use `sudo` on both if your prefix is outside your home directory. Then put the
 prefix's `bin/` on your PATH:
