@@ -15,7 +15,7 @@
 #   - under a FIPS config, base (3.5.7) + fips (3.5.4) are both active
 #   - a post-quantum TLS 1.3 handshake negotiates X25519MLKEM768
 #
-# Usage: dist-verify.sh <path/to/qudossl-commercial-X.Y.Z-src.tar.gz>
+# Usage: dist-verify.sh <path/to/qudossl-X.Y.Z-src.tar.gz>
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ TARBALL=${1:?usage: dist-verify.sh <tarball>}
 # A previous install's exports must not leak into the build or fipsinstall.
 unset OPENSSL_CONF OPENSSL_MODULES
 
-VERSION=$(basename "$TARBALL" | sed -n 's/^qudossl-commercial-\(.*\)-src\.tar\.gz$/\1/p')
+VERSION=$(basename "$TARBALL" | sed -n 's/^qudossl-\(.*\)-src\.tar\.gz$/\1/p')
 [ -n "$VERSION" ] || { echo "dist-verify: cannot parse version from $(basename "$TARBALL")" >&2; exit 1; }
 
 JOBS=$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu || echo 4 )
@@ -46,8 +46,8 @@ check() { # check <name> <ok:0|nonzero> <detail>
 
 echo "==> unpacking $(basename "$TARBALL") into $WORK"
 tar -xzf "$TARBALL" -C "$WORK"
-SRC="$WORK/qudossl-commercial-$VERSION"
-[ -d "$SRC" ] || { echo "dist-verify: tarball did not unpack to qudossl-commercial-$VERSION/" >&2; exit 1; }
+SRC="$WORK/qudossl-$VERSION"
+[ -d "$SRC" ] || { echo "dist-verify: tarball did not unpack to qudossl-$VERSION/" >&2; exit 1; }
 [ -f "$SRC/openssl-fips/Configure" ] || \
   { echo "dist-verify: tarball is missing the vendored openssl-fips/ source" >&2; exit 1; }
 
