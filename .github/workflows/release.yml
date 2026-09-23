@@ -1,6 +1,6 @@
 # Release — build, verify and publish the QudoSSL Commercial source tarball.
 #
-# Triggered by pushing a signed annotated tag `qudossl-commercial-X.Y.Z`
+# Triggered by pushing a signed annotated tag `qudossl-X.Y.Z`
 # (or manually, which produces a snapshot without publishing a release).
 # The tarball is cut from git HEADs and verified end-to-end from the unpacked
 # archive (build, install_sw, install_fips, acceptance checks, PQ handshake)
@@ -13,7 +13,7 @@ name: Release
 
 on:
   push:
-    tags: ['qudossl-commercial-*']
+    tags: ['qudossl-*']
   workflow_dispatch:
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
         run: make -C build dist-verify
 
       - name: Publish GitHub Release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/qudossl-commercial-')
+        if: startsWith(github.ref, 'refs/tags/qudossl-')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -42,7 +42,7 @@ jobs:
             dist/*-src.tar.gz dist/*-src.tar.gz.sha256 \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
-            --notes "QudoSSL Commercial source distribution. Verify: \`shasum -a 256 -c $GITHUB_REF_NAME-src.tar.gz.sha256\`. Build per the migration handbook: \`tar xf $GITHUB_REF_NAME-src.tar.gz && make -C qudossl-commercial-*/build all\`."
+            --notes "QudoSSL Commercial source distribution. Verify: \`shasum -a 256 -c $GITHUB_REF_NAME-src.tar.gz.sha256\`. Build per the migration handbook: \`tar xf $GITHUB_REF_NAME-src.tar.gz && make -C qudossl-*/build all\`."
 
       - name: Keep snapshot tarball as a workflow artifact (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}

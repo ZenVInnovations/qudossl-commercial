@@ -8,7 +8,7 @@ Accepted — 2026-09-07.
 
 Customers obtain QudoSSL Commercial as a source distribution and build it
 themselves (the migration handbook's Phase 1 begins
-`tar xf qudossl-commercial-1.0.0-src.tar.*`). We need a release artefact with
+`tar xf qudossl-1.0.0-src.tar.*`). We need a release artefact with
 OpenSSL's own properties: an immutable tarball cut from a signed tag, with a
 checksum and signature, and download-verify-build instructions.
 

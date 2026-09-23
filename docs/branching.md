@@ -57,11 +57,11 @@ are kept apart:
 
 | Tag | Namespace | Example | Meaning |
 |---|---|---|---|
-| Product release | `qudossl-commercial-<major>.<minor>.<patch>` | `qudossl-commercial-1.0.0` | A released state of **this** repository on `main` (product **QudoSSL 1.0.0**). |
+| Product release | `qudossl-<major>.<minor>.<patch>` | `qudossl-1.0.0` | A released state of **this** repository on `main` (product **QudoSSL 1.0.0**). |
 | Upstream pin | (recorded, not created here) | `openssl-3.5.7` | The upstream OpenSSL tag `openssl/` is vendored from — an OpenSSL tag, not ours. |
 
 The product release tag names the QudoSSL Commercial artefact; the upstream pin
-names the OpenSSL LTS release inside `openssl/`. `qudossl-commercial-1.0.0`
+names the OpenSSL LTS release inside `openssl/`. `qudossl-1.0.0`
 currently carries upstream `openssl-3.5.7`. Do not fold the OpenSSL base version
 into the product tag or vice versa.
 

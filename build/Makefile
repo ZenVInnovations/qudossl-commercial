@@ -242,7 +242,7 @@ distclean:
 # submodule access needed). Deterministic where the host tar allows (GNU tar);
 # the canonical release artefact is produced by the release workflow on Linux.
 DIST_VERSION := $(shell sed -n 's/^QUDO_PRODUCT_VERSION="\(.*\)"/\1/p' $(ROOT)/build/qudossl)
-DIST_NAME    := qudossl-commercial-$(DIST_VERSION)
+DIST_NAME    := qudossl-$(DIST_VERSION)
 DIST_DIR     := $(ROOT)/dist
 SOURCE_EPOCH := $(shell git -C $(ROOT) log -1 --format=%ct 2>/dev/null || echo 0)
 
